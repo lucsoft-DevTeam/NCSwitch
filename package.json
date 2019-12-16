@@ -1,0 +1,22 @@
+{
+    "name": "sncswitch",
+    "version": "0.1.0",
+    "description": "HomeSYS NCSwitch",
+    "main": "index.ts",
+    "bin": {
+        "sncswitch": "index.js"
+    },
+    "scripts": {
+        "test": "tsc && node /bin/index.js",
+        "start": "tsc && node ./bin/index.js"
+    },
+    "author": "lucsoft",
+    "license": "ISC",
+    "devDependencies": {
+        "@types/node": "^12.12.17"
+    },
+    "dependencies": {
+        "tslib": "^1.10.0",
+        "typescript": "^3.7.3"
+    }
+}
