@@ -1,20 +1,28 @@
-import { fileSystem } from './modules/fileSystem';
+
+import { SystemControl } from './modules/SystemControl';
 
 const moduleList = [
-    new fileSystem()
+    new SystemControl()
 ];
 
 const log = (message: string, moduleName: string = "NCSwitch System", type: "info" | "warn" | "error" = "info") =>
 {
     console.log(`${type == "info" ? "✅" : type == "warn" ? "🔥" : "🚨🚨🚨"}  [${moduleName}] ${message}`);
 }
+(() =>
+{
+    console.clear();
+    log('Checking for Updates...');
+    moduleList.forEach(async x => await x.UpdateIfAvailable());
 
-log('Checking for Updates...');
-moduleList.forEach(x => x.UpdateIfAvailable());
-log('PreInitiation...');
-moduleList.forEach(x => x.PreInitiation());
-log('PreInitiation...');
-moduleList.forEach(x => x.Initiation());
-log('PreInitiation...');
-moduleList.forEach(x => x.Loaded());
-log('System Loaded');
+    log('PreInitiation...');
+    moduleList.forEach(async x => await x.PreInitiation());
+
+    log('Initiation...');
+    moduleList.forEach(async x => await x.Initiation());
+
+    log('Loading Modules...');
+    moduleList.forEach(async x => await x.StartModule());
+
+    log('System Loaded');
+})();

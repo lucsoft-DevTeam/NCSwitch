@@ -22,14 +22,20 @@ export abstract class NCSModule
     abstract readonly RequiesReboot: boolean;
 
 
-    protected log(message: string, type: "info" | "warn" | "error" = "info")
+    protected log(message: string, type: "info" | "warn" | "error" | "debug" = "info")
     {
-        console.log(`${type == "info" ? "✅" : type == "warn" ? "🔥" : "🚨🚨🚨"}  [${this.ModuleName}] ${message}`);
+        console.log(`${type == "info" ? "✅" : type == "warn" ? "🔥" : type == "debug" ? "🚧" : "🚨🚨🚨"}  [${this.ModuleName.split('.')[ 1 ]}] ${message}`);
     }
 
-    protected abstract PreInitiation(): void;
+    public PreInitiation(): Promise<void>
+    {
+        return new Promise((done) => done());
+    };
 
-    protected abstract Initiation(): void;
+    public Initiation(): Promise<void>
+    {
+        return new Promise((done) => done());
+    };
 
     protected abstract UpdateIfAvailable(): Promise<boolean>;
 
@@ -47,8 +53,8 @@ export abstract class NCSModule
         NCSEmit.emit(listener, args);
     }
 
-    public Loaded()
+    public StartModule()
     {
-        this.log('Module Loaded...');
+        this.log('Module Loaded... (Remove This)', "debug");
     }
 }
