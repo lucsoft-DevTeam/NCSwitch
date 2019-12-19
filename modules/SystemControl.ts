@@ -1,6 +1,14 @@
 import { NCSModule, NCSModuleType } from '../modules';
 import { spawn, exec, ChildProcessWithoutNullStreams } from 'child_process';
 
+export const supportedFSType = [
+    'iso9660',
+    'vfat',
+    'ntfs',
+    'exfat',
+    'udf'
+]
+
 export interface SystemDevicesPartions
 {
     label: string,
@@ -28,14 +36,6 @@ export class SystemControl extends NCSModule
     {
         return new Promise((done) =>
         {
-            setInterval(() =>
-            {
-                if (this.devices.length >= 1)
-                {
-                    this.log(JSON.stringify(this.devices));
-                }
-
-            }, 1000);
             this.udev = spawn('udevadm', [ 'monitor', '-p' ])
             var buffer = "";
             this.udev.stdout.on('data', (data: Buffer) =>
@@ -105,14 +105,13 @@ export class SystemControl extends NCSModule
 
         this.SendListener(`${this.ModuleName}.monitoringFilteredLS`, { device, header });
 
-        if (device.action == undefined && device.eventtype == "udev" && device.idvendor)
+        if (device.action == undefined && device.eventtype == "udev" && device.idvendor && device.idvendorfromdatabase)
         {
             this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname} ${device.idvendor}#${device.idvendorid}`);
             if (device.driver)
                 this.addDevice(device);
             else
                 this.removeDevice(device);
-
         } else if (device.idmodel != undefined)
         {
             var id = `${device.idvendor}#${device.idvendorid}`;
@@ -133,9 +132,9 @@ export class SystemControl extends NCSModule
                 {
                     this.addDevice(device);
 
-                } else if (device.devtype == "partition")
+                } else if ((device.devtype == "partition" || device.devtype == "disk") && device.idfstype != undefined)
                 {
-                    if (device.idfstype == "exfat" && device.action == "add")
+                    if (supportedFSType.includes(device.idfstype) && device.action == "add")
                     {
                         this.mountFileSystem(id, device.devname);
                         let cachedDevice = this.devices.find(x => x.deviceID == id);
