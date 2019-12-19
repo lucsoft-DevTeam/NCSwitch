@@ -1,0 +1,6 @@
+{
+    "apt": [
+        "exfat-fuse",
+        "exfat-utils"
+    ]
+}

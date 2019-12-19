@@ -1,5 +1,21 @@
 import { NCSModule, NCSModuleType } from '../modules';
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, exec, ChildProcessWithoutNullStreams } from 'child_process';
+
+export interface SystemDevicesPartions
+{
+    label: string,
+    devname?: string,
+    mountedFolder?: string
+}
+
+export interface SystemDevicesUSB
+{
+    deviceID: string,
+    deviceName?: string,
+    deviceFallbackName: string,
+    deviceModel?: string,
+    devicePartions?: SystemDevicesPartions[]
+}
 
 export class SystemControl extends NCSModule
 {
@@ -8,6 +24,7 @@ export class SystemControl extends NCSModule
     RequiesReboot = false;
     // private lastDevicelist: any[] = [];
     private udev?: ChildProcessWithoutNullStreams;
+    private devices: SystemDevicesUSB[] = [];
     StartModule(): Promise<void>
     {
         return new Promise((done) =>
@@ -52,20 +69,28 @@ export class SystemControl extends NCSModule
         let device: any = {};
         device[ 'eventtype' ] = isKernel ? 'kernel' : 'udev';
         args.forEach((attribut) => device[ attribut.split('=')[ 0 ].toLowerCase().split('_').join('') ] = attribut.split('=')[ 1 ]);
-        // if (argsObject.devtype != "disk")
 
         if (device.subsystem == "leds" || device.subsystem == "scsi")
             return;
 
         if (device.action == undefined && device.eventtype == "udev" && device.idvendor)
         {
-            // if (device.idmodel == undefined)
+            this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname} ${device.idvendor}#${device.idvendorid}`, "warn");
+            console.log(device);
 
-            this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname}`, "warn");
-
-            // console.log(device);
+            if (device.driver)
+            {
+                if (this.devices.find((deviceQuery) => deviceQuery.deviceID == `${device.idvendor}#${device.idvendorid}`) === undefined)
+                {
+                    this.devices.push({
+                        deviceID: `${device.idvendor}#${device.idvendorid}`,
+                        deviceFallbackName: device.idvendorfromdatabase || device.idvendor
+                    })
+                }
+            }
         } else if (device.idmodel != undefined)
         {
+            var id = `${device.idvendor}#${device.idvendorid}`;
             var added = true;
             if (device.devtype == "partition")
                 added = false;
@@ -74,20 +99,33 @@ export class SystemControl extends NCSModule
                 added = false;
 
             if (device.devtype == "usb_device" && device.driver != undefined)
-            {
-                // console.log(device);
                 added = false;
 
+            this.log(`'${device.idfslabel || device.idvendorfromdatabase}' was ${device.action || (added ? "add" : "remove")} its a ${device.devtype} on ${device.devname} (${device.subsystem}) ${device.idvendor}#${device.idvendorid}`);
+            console.log(device);
+
+            if (device.idfstype != "exfat")
+            {
+                this.log(`${device.idfstype} is currently not supported.`);
             }
-
-            this.log(`${device.idfslabel || device.idvendorfromdatabase} was ${device.action || (added ? "add" : "remove")} its a ${device.devtype} on ${device.devname} (${device.subsystem})`)
-            console.log(device.devtype);
-            if (device.action == undefined && device.devtype == undefined)
-                console.log(device);
-
+            if (device.idfstype == "exfat" && device.action == "add")
+            {
+                this.mountFileSystem(id, device.devname);
+            }
         }
-        // console.log(argsObject);
     }
+
+    private mountFileSystem(id: string, devname: string)
+    {
+        exec(`mkdir /mnt/${id}-${devname.split('/')[ 2 ]}`);
+        exec(`mount ${devname} /mnt/${id}-${devname.split('/')[ 2 ]}`);
+        this.log(`mounted /mnt/${id}-${devname.split('/')[ 2 ]}`);
+    }
+
+    // private umountFileSystem(id: string, devname: string)
+    // {
+    //     exec(`umount /mnt/${id}-${devname.split('/')[ 2 ]}`);
+    // }
 
     // private updateService(complete?: () => void)
     // {
@@ -179,12 +217,6 @@ export class SystemControl extends NCSModule
     //         complete?.();
     //     });
 
-    // }
-
-    // private removeUSB(bus?: string, lev?: string)
-    // {
-    //     if (bus != undefined && lev != undefined)
-    //         exec(`echo 1 > /sys/bus/usb/devices/${Number(bus)}-${Number(lev)}/remove`, console.log);
     // }
 
     UpdateIfAvailable(): Promise<boolean>
