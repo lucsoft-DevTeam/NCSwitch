@@ -22,7 +22,7 @@ export abstract class NCSModule
     abstract readonly RequiesReboot: boolean;
 
 
-    protected log(message: string, type: "info" | "warn" | "error" | "debug" = "info")
+    protected log(message: string = "", type: "info" | "warn" | "error" | "debug" = "info")
     {
         console.log(`${type == "info" ? "✅" : type == "warn" ? "🔥" : type == "debug" ? "🚧" : "🚨🚨🚨"}  [${this.ModuleName.split('.')[ 1 ]}] ${message}`);
     }

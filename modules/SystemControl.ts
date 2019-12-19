@@ -22,13 +22,20 @@ export class SystemControl extends NCSModule
     ModuleName = "lucsoft.SystemControl";
     ModuleType = NCSModuleType.OfflineModule;
     RequiesReboot = false;
-    // private lastDevicelist: any[] = [];
     private udev?: ChildProcessWithoutNullStreams;
     private devices: SystemDevicesUSB[] = [];
     StartModule(): Promise<void>
     {
         return new Promise((done) =>
         {
+            setInterval(() =>
+            {
+                if (this.devices.length >= 1)
+                {
+                    this.log(JSON.stringify(this.devices));
+                }
+
+            }, 1000);
             this.udev = spawn('udevadm', [ 'monitor', '-p' ])
             var buffer = "";
             this.udev.stdout.on('data', (data: Buffer) =>
@@ -50,6 +57,24 @@ export class SystemControl extends NCSModule
             // this.updateService(() => done());
             // setInterval(() => this.updateService(), 2000);
         })
+    }
+
+    private addDevice(device: any)
+    {
+        if (this.devices.find((deviceQuery) => deviceQuery.deviceID == `${device.idvendor}#${device.idvendorid}`) === undefined)
+        {
+            this.devices.push({
+                deviceID: `${device.idvendor}#${device.idvendorid}`,
+                deviceFallbackName: device.idvendorfromdatabase || device.idvendor,
+                deviceModel: device.idmodel,
+                devicePartions: []
+            })
+        }
+    }
+
+    private removeDevice(device: any)
+    {
+        this.devices = this.devices.filter(x => x.deviceID != `${device.idvendor}#${device.idvendorid}`);
     }
 
     private parseUdev(data: string, showKernel = false): void
@@ -76,18 +101,11 @@ export class SystemControl extends NCSModule
         if (device.action == undefined && device.eventtype == "udev" && device.idvendor)
         {
             this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname} ${device.idvendor}#${device.idvendorid}`, "warn");
-            console.log(device);
-
             if (device.driver)
-            {
-                if (this.devices.find((deviceQuery) => deviceQuery.deviceID == `${device.idvendor}#${device.idvendorid}`) === undefined)
-                {
-                    this.devices.push({
-                        deviceID: `${device.idvendor}#${device.idvendorid}`,
-                        deviceFallbackName: device.idvendorfromdatabase || device.idvendor
-                    })
-                }
-            }
+                this.addDevice(device);
+            else
+                this.removeDevice(device);
+
         } else if (device.idmodel != undefined)
         {
             var id = `${device.idvendor}#${device.idvendorid}`;
@@ -101,16 +119,36 @@ export class SystemControl extends NCSModule
             if (device.devtype == "usb_device" && device.driver != undefined)
                 added = false;
 
-            this.log(`'${device.idfslabel || device.idvendorfromdatabase}' was ${device.action || (added ? "add" : "remove")} its a ${device.devtype} on ${device.devname} (${device.subsystem}) ${device.idvendor}#${device.idvendorid}`);
-            console.log(device);
 
-            if (device.idfstype != "exfat")
+            if ((device.action || (added ? "add" : "remove")) == "add")
             {
-                this.log(`${device.idfstype} is currently not supported.`);
-            }
-            if (device.idfstype == "exfat" && device.action == "add")
+                if (device.devtype == "usb_device")
+                {
+                    this.addDevice(device);
+
+                } else if (device.devtype == "partition")
+                {
+                    if (device.idfstype == "exfat" && device.action == "add")
+                    {
+                        this.mountFileSystem(id, device.devname);
+                        let cachedDevice = this.devices.find(x => x.deviceID == id);
+                        if (cachedDevice && cachedDevice.deviceName == undefined)
+                            cachedDevice.deviceName = device.idfslabel || device.idvendorfromdatabase;
+
+                        this.devices.find(x => x.deviceID == id)?.devicePartions?.push({
+                            label: device.idfslabel || device.idvendorfromdatabase,
+                            devname: device.devname,
+                            mountedFolder: `/mnt/${id}-${device.devname.split('/')[ 2 ]}`
+                        })
+                        this.log(`New Storage: ${device.idfslabel || device.idvendorfromdatabase} mounted on /mnt/${id}-${device.devname.split('/')[ 2 ]}`);
+                    } else
+                    {
+                        this.log(`${device.idfstype} is unsupported`);
+                    }
+                }
+            } else if ((device.action || (added ? "add" : "remove")) == "remove")
             {
-                this.mountFileSystem(id, device.devname);
+                this.removeDevice(device);
             }
         }
     }
@@ -118,106 +156,15 @@ export class SystemControl extends NCSModule
     private mountFileSystem(id: string, devname: string)
     {
         exec(`mkdir /mnt/${id}-${devname.split('/')[ 2 ]}`);
-        exec(`mount ${devname} /mnt/${id}-${devname.split('/')[ 2 ]}`);
-        this.log(`mounted /mnt/${id}-${devname.split('/')[ 2 ]}`);
+        exec(`mount ${devname} /mnt/${id}-${devname.split('/')[ 2 ]}`, (err) =>
+        {
+            if (err != null)
+            {
+                this.log(err.message);
+                this.log(err.stack);
+            }
+        });
     }
-
-    // private umountFileSystem(id: string, devname: string)
-    // {
-    //     exec(`umount /mnt/${id}-${devname.split('/')[ 2 ]}`);
-    // }
-
-    // private updateService(complete?: () => void)
-    // {
-    //     exec('cat /sys/kernel/debug/usb/devices', (err, output) =>
-    //     {
-    //         var format = output.split('\n\n')
-    //             .map(block =>
-    //                 block.split('\n')
-    //                     .map(item =>
-    //                         item.split(' ')));
-
-    //         const devicelist = format.map((device, index) =>
-    //         {
-    //             const serviceData = device.filter((datablock) => datablock[ 0 ] == "S:").map(x => x.filter(y => y != "" && y != "S:").join(' ').split('='));
-    //             const tableData = device.filter((datablock) => datablock[ 0 ] == "T:").map(x => x.filter(y => y != "" && y != "T:"));
-    //             return {
-    //                 raw: device,
-    //                 bus: tableData[ 0 ].find(x => x.startsWith('Bus'))?.split('=')[ 1 ],
-    //                 lev: tableData[ 0 ].find(x => x.startsWith('Lev'))?.split('=')[ 1 ],
-    //                 serviceData: serviceData,
-    //                 manufacturer: serviceData.find(x => x[ 0 ] == "Manufacturer")?.[ 1 ],
-    //                 product: serviceData.find(x => x[ 0 ] == "Product")?.[ 1 ],
-    //                 serialNumber: serviceData.find(x => x[ 0 ] == "SerialNumber")?.[ 1 ],
-    //                 type: device.filter((datablock) => datablock[ 0 ] == "I:*")?.find(data => data.find(item => item.startsWith('Driver')))?.find(x => x.startsWith('Driver'))?.split('=')[ 1 ]
-    //             };
-    //         })
-    //         if (devicelist.length != this.lastDevicelist.length)
-    //         {
-    //             var deviceAdded = devicelist.filter(item1 =>
-    //                 !this.lastDevicelist.some(item2 => (
-    //                     item2.serialNumber === item1.serialNumber
-    //                     && item2.product === item1.product
-    //                     && item2.manufacturer === item1.manufacturer
-    //                     && item2.lev == item1.lev
-    //                     && item2.bus == item1.bus
-    //                 )))
-
-    //             var deviceRemoved = this.lastDevicelist.filter(item1 =>
-    //                 !devicelist.some(item2 => (
-    //                     item2.serialNumber === item1.serialNumber
-    //                     && item2.product === item1.product
-    //                     && item2.manufacturer === item1.manufacturer
-    //                     && item2.lev == item1.lev
-    //                     && item2.bus == item1.bus
-    //                 )))
-
-
-    //             if (deviceAdded.length >= 1)
-    //             {
-    //                 deviceAdded.forEach((device) =>
-    //                 {
-    //                     if (device.type == "hub")
-    //                         return;
-    //                     console.log(device.raw.join('\n'));
-    //                     this.log(`${device.type == "usb-storage" ? `${device.product} ${device.manufacturer} got added as USB Device to the System` : `A ${device.serviceData} device got added`}`, "debug")
-    //                     this.SendListener(`${this.ModuleName}.preUSBDeviceConnected`, {
-    //                         type: device.type,
-    //                         info: {
-    //                             product: device.product,
-    //                             manufacturer: device.manufacturer,
-    //                         },
-    //                         remove: () => this.removeUSB(device.bus, device.lev)
-    //                     });
-
-    //                 })
-    //             } else if (deviceRemoved.length >= 1)
-    //             {
-    //                 deviceRemoved.forEach((device) =>
-    //                 {
-    //                     this.log(`${device.type == "usb-storage" ? `${device.product} ${device.manufacturer} got removed from the System` : `A ${device} device got removed`}`, "debug");
-
-    //                     this.SendListener(`${this.ModuleName}.preUSBDeviceDisconnected`, {
-    //                         type: device.type,
-    //                         info: {
-    //                             product: device.product,
-    //                             manufacturer: device.manufacturer,
-    //                             serviceData: device.serviceData
-    //                         },
-    //                         remove: () => this.removeUSB(device.bus, device.lev)
-    //                     });
-    //                 })
-
-    //             } else
-    //             {
-    //                 this.log(`A Device got Updated`);
-    //             }
-    //         }
-    //         this.lastDevicelist = devicelist;
-    //         complete?.();
-    //     });
-
-    // }
 
     UpdateIfAvailable(): Promise<boolean>
     {
