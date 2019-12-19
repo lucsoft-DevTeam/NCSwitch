@@ -54,8 +54,6 @@ export class SystemControl extends NCSModule
                 })
             })
             done();
-            // this.updateService(() => done());
-            // setInterval(() => this.updateService(), 2000);
         })
     }
 
@@ -69,16 +67,21 @@ export class SystemControl extends NCSModule
                 deviceModel: device.idmodel,
                 devicePartions: []
             })
+            this.SendListener(`${this.ModuleName}.newDevice`, { deviceID: `${device.idvendor}#${device.idvendorid}`, devices: this.devices });
         }
     }
 
     private removeDevice(device: any)
     {
+        this.SendListener(`${this.ModuleName}.removedDevice`, { device: { ...this.devices.find(x => x.deviceID == `${device.idvendor}#${device.idvendorid}`) } });
         this.devices = this.devices.filter(x => x.deviceID != `${device.idvendor}#${device.idvendorid}`);
     }
 
     private parseUdev(data: string, showKernel = false): void
     {
+
+        this.SendListener(`${this.ModuleName}.rawMonitoring`, { data });
+
         const columns = data.split('\n');
         const cleanedUp = columns.filter(rows => rows != '');
         const header = cleanedUp[ 0 ];
@@ -95,12 +98,16 @@ export class SystemControl extends NCSModule
         device[ 'eventtype' ] = isKernel ? 'kernel' : 'udev';
         args.forEach((attribut) => device[ attribut.split('=')[ 0 ].toLowerCase().split('_').join('') ] = attribut.split('=')[ 1 ]);
 
+        this.SendListener(`${this.ModuleName}.monitoring`, { device, header });
+
         if (device.subsystem == "leds" || device.subsystem == "scsi")
             return;
 
+        this.SendListener(`${this.ModuleName}.monitoringFilteredLS`, { device, header });
+
         if (device.action == undefined && device.eventtype == "udev" && device.idvendor)
         {
-            this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname} ${device.idvendor}#${device.idvendorid}`, "warn");
+            this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname} ${device.idvendor}#${device.idvendorid}`);
             if (device.driver)
                 this.addDevice(device);
             else
@@ -140,10 +147,13 @@ export class SystemControl extends NCSModule
                             devname: device.devname,
                             mountedFolder: `/mnt/${id}-${device.devname.split('/')[ 2 ]}`
                         })
+                        this.SendListener(`${this.ModuleName}.newStorage`, { devices: this.devices, deviceID: id });
+
                         this.log(`New Storage: ${device.idfslabel || device.idvendorfromdatabase} mounted on /mnt/${id}-${device.devname.split('/')[ 2 ]}`);
                     } else
                     {
                         this.log(`${device.idfstype} is unsupported`);
+                        this.SendListener(`${this.ModuleName}.newStorageFailed`, { error: "not supported" });
                     }
                 }
             } else if ((device.action || (added ? "add" : "remove")) == "remove")
