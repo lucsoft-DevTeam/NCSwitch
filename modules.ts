@@ -1,14 +1,6 @@
-import EventEmitter from 'events';
-class NCSEmittier extends EventEmitter { }
-
-const NCSEmit = new NCSEmittier();
-
-export enum NCSModuleType
-{
-    OfflineModule,
-    UserModule,
-    OnlineModule
-}
+import { NCSEmit } from './';
+import { config } from './config';
+import { NCSModuleType } from './types';
 
 export abstract class NCSModule
 {
@@ -21,10 +13,11 @@ export abstract class NCSModule
 
     abstract readonly RequiesReboot: boolean;
 
+    readonly config = config;
 
-    protected log(message: string = "", type: "info" | "warn" | "error" | "debug" = "info")
+    protected log(message: string = '', type: 'info' | 'warn' | 'error' | 'debug' = 'info')
     {
-        console.log(`${type == "info" ? "✅" : type == "warn" ? "🔥" : type == "debug" ? "🚧" : "🚨🚨🚨"}  [${this.ModuleName.split('.')[ 1 ]}] ${message}`);
+        console.log(`${type == 'info' ? '✅' : type == 'warn' ? '🔥' : type == 'debug' ? '🚧' : '🚨'}  [${this.ModuleName.split('.')[ 1 ]}] ${message}`);
     }
 
     public PreInitiation(): Promise<void>
@@ -43,18 +36,23 @@ export abstract class NCSModule
      * Communicate with other Modules
      * @param type The Suffix of youre module name
      */
-    protected createListener(type: string = "default", action: Function)
+    protected createListener(type: string = 'default', action: Function)
     {
         NCSEmit.on(`${this.ModuleName}.${type}`, () => action());
     }
 
-    protected SendListener(listener: string, args: string | object | boolean)
+    protected createListenerWide(type: string = 'default', action: (...args: any[]) => void)
+    {
+        NCSEmit.on(`${type}`, action);
+    }
+
+    protected sendListener(listener: string, args: string | object | boolean)
     {
         NCSEmit.emit(listener, args);
     }
 
     public StartModule()
     {
-        this.log('Module Loaded... (Remove This)', "debug");
+        this.log('Module Loaded... (Remove This)', 'debug');
     }
 }

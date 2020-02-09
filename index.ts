@@ -1,16 +1,24 @@
+import { EventEmitter } from 'events';
 
-import { SystemControl } from './modules/SystemControl';
+import { moduleList } from './modulelist';
+import { BootUpTracker } from './modules/BootUpTracker';
 
-const moduleList = [
-    new SystemControl()
-];
+const bootUp = new BootUpTracker();
+class NCSEmittier extends EventEmitter { }
 
-const log = (message: string, moduleName: string = "NCSwitch System", type: "info" | "warn" | "error" = "info") =>
+export var NCSEmit = new NCSEmittier();
+
+const log = (message: string, moduleName: string = 'NCSwitch System', type: 'info' | 'warn' | 'error' = 'info') =>
 {
-    console.log(`${type == "info" ? "✅" : type == "warn" ? "🔥" : "🚨🚨🚨"}  [${moduleName}] ${message}`);
+    console.log(`${type == 'info' ? '✅' : type == 'warn' ? '🔥' : '🚨🚨🚨'}  [${moduleName}] ${message}`);
 }
 (() =>
 {
+
+    /**
+     * Startup process wil be changes
+     */
+
     console.clear();
     log('Checking for Updates...');
     moduleList.forEach(async x => await x.UpdateIfAvailable());
@@ -24,5 +32,5 @@ const log = (message: string, moduleName: string = "NCSwitch System", type: "inf
     log('Loading Modules...');
     moduleList.forEach(async x => await x.StartModule());
 
-    log('System Loaded');
+    log(`System Loaded (took ${bootUp.bootUpFinished()}ms)`);
 })();

@@ -1,5 +1,7 @@
-import { NCSModule, NCSModuleType } from '../modules';
-import { spawn, exec, ChildProcessWithoutNullStreams } from 'child_process';
+import { ChildProcessWithoutNullStreams, exec, spawn } from 'child_process';
+
+import { NCSModule } from '../modules';
+import { NCSModuleType } from '../types';
 
 export const supportedFSType = [
     'iso9660',
@@ -27,9 +29,9 @@ export interface SystemDevicesUSB
 
 export class SystemControl extends NCSModule
 {
-    ModuleName = "lucsoft.SystemControl";
+    ModuleName = 'lucsoft.SystemControl';
     ModuleType = NCSModuleType.OfflineModule;
-    RequiesReboot = false;
+    RequiesReboot = true;
     private udev?: ChildProcessWithoutNullStreams;
     private devices: SystemDevicesUSB[] = [];
     StartModule(): Promise<void>
@@ -37,7 +39,7 @@ export class SystemControl extends NCSModule
         return new Promise((done) =>
         {
             this.udev = spawn('udevadm', [ 'monitor', '-p' ])
-            var buffer = "";
+            var buffer = '';
             this.udev.stdout.on('data', (data: Buffer) =>
             {
                 var stringData = data.toString();
@@ -49,7 +51,7 @@ export class SystemControl extends NCSModule
                         buffer = e;
                     } else
                     {
-                        buffer += e + "\n";
+                        buffer += e + '\n';
                     }
                 })
             })
@@ -67,20 +69,20 @@ export class SystemControl extends NCSModule
                 deviceModel: device.idmodel,
                 devicePartions: []
             })
-            this.SendListener(`${this.ModuleName}.newDevice`, { deviceID: `${device.idvendor}#${device.idvendorid}`, devices: this.devices });
+            this.sendListener(`${this.ModuleName}.newDevice`, { deviceID: `${device.idvendor}#${device.idvendorid}`, devices: this.devices });
         }
     }
 
     private removeDevice(device: any)
     {
-        this.SendListener(`${this.ModuleName}.removedDevice`, { device: { ...this.devices.find(x => x.deviceID == `${device.idvendor}#${device.idvendorid}`) } });
+        this.sendListener(`${this.ModuleName}.removedDevice`, { device: { ...this.devices.find(x => x.deviceID == `${device.idvendor}#${device.idvendorid}`) } });
         this.devices = this.devices.filter(x => x.deviceID != `${device.idvendor}#${device.idvendorid}`);
     }
 
     private parseUdev(data: string, showKernel = false): void
     {
 
-        this.SendListener(`${this.ModuleName}.rawMonitoring`, { data });
+        this.sendListener(`${this.ModuleName}.rawMonitoring`, { data });
 
         const columns = data.split('\n');
         const cleanedUp = columns.filter(rows => rows != '');
@@ -98,14 +100,14 @@ export class SystemControl extends NCSModule
         device[ 'eventtype' ] = isKernel ? 'kernel' : 'udev';
         args.forEach((attribut) => device[ attribut.split('=')[ 0 ].toLowerCase().split('_').join('') ] = attribut.split('=')[ 1 ]);
 
-        this.SendListener(`${this.ModuleName}.monitoring`, { device, header });
+        this.sendListener(`${this.ModuleName}.monitoring`, { device, header });
 
-        if (device.subsystem == "leds" || device.subsystem == "scsi")
+        if (device.subsystem == 'leds' || device.subsystem == 'scsi')
             return;
 
-        this.SendListener(`${this.ModuleName}.monitoringFilteredLS`, { device, header });
+        this.sendListener(`${this.ModuleName}.monitoringFilteredLS`, { device, header });
 
-        if (device.action == undefined && device.eventtype == "udev" && device.idvendor && device.idvendorfromdatabase)
+        if (device.action == undefined && device.eventtype == 'udev' && device.idvendor && device.idvendorfromdatabase)
         {
             this.log(`${device.idvendorfromdatabase} was ${device.driver ? 'added' : 'removed'} its a ${device.devtype} on ${device.devname} ${device.idvendor}#${device.idvendorid}`);
             if (device.driver)
@@ -116,25 +118,25 @@ export class SystemControl extends NCSModule
         {
             var id = `${device.idvendor}#${device.idvendorid}`;
             var added = true;
-            if (device.devtype == "partition")
+            if (device.devtype == 'partition')
                 added = false;
 
-            if (device.devtype == "disk")
+            if (device.devtype == 'disk')
                 added = false;
 
-            if (device.devtype == "usb_device" && device.driver != undefined)
+            if (device.devtype == 'usb_device' && device.driver != undefined)
                 added = false;
 
 
-            if ((device.action || (added ? "add" : "remove")) == "add")
+            if ((device.action || (added ? 'add' : 'remove')) == 'add')
             {
-                if (device.devtype == "usb_device")
+                if (device.devtype == 'usb_device')
                 {
                     this.addDevice(device);
 
-                } else if ((device.devtype == "partition" || device.devtype == "disk") && device.idfstype != undefined)
+                } else if ((device.devtype == 'partition' || device.devtype == 'disk') && device.idfstype != undefined)
                 {
-                    if (supportedFSType.includes(device.idfstype) && device.action == "add")
+                    if (supportedFSType.includes(device.idfstype) && device.action == 'add')
                     {
                         this.mountFileSystem(id, device.devname);
                         let cachedDevice = this.devices.find(x => x.deviceID == id);
@@ -146,16 +148,16 @@ export class SystemControl extends NCSModule
                             devname: device.devname,
                             mountedFolder: `/mnt/${id}-${device.devname.split('/')[ 2 ]}`
                         })
-                        this.SendListener(`${this.ModuleName}.newStorage`, { devices: this.devices, deviceID: id });
+                        this.sendListener(`${this.ModuleName}.newStorage`, { devices: this.devices, deviceID: id });
 
                         this.log(`New Storage: ${device.idfslabel || device.idvendorfromdatabase} mounted on /mnt/${id}-${device.devname.split('/')[ 2 ]}`);
                     } else
                     {
                         this.log(`${device.idfstype} is unsupported`);
-                        this.SendListener(`${this.ModuleName}.newStorageFailed`, { error: "not supported" });
+                        this.sendListener(`${this.ModuleName}.newStorageFailed`, { error: 'not supported' });
                     }
                 }
-            } else if ((device.action || (added ? "add" : "remove")) == "remove")
+            } else if ((device.action || (added ? 'add' : 'remove')) == 'remove')
             {
                 this.removeDevice(device);
             }
