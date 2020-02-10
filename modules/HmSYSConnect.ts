@@ -28,8 +28,6 @@ export class HmSYSConnect extends NCSModule
                         }));
                     else
                         this.sendListener("socketstream", response);
-
-                    this.log('Response ' + JSON.stringify(response));
                 } catch (e)
                 {
                     const error = e as SyntaxError;
