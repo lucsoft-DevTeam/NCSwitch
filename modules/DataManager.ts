@@ -13,7 +13,7 @@ export class DataManager extends NCSModule
     ModuleName = 'lucsoft.DataManager';
     ModuleType = NCSModuleType.OfflineModule;
     RequiesReboot = false;
-
+    HouseData?: houseData = undefined;
     StartModule(): Promise<void>
     {
         return new Promise((done) =>
@@ -40,6 +40,7 @@ export class DataManager extends NCSModule
     private handleLogin(rsp: ResponsePosiabilty)
     {
         this.log(`Hi there, I'm the "${rsp.house?.houseName}" and get controlled by ${rsp.house?.ownerID}`);
+        this.HouseData = rsp.house;
     }
 
     private sendError = (errorcode: string) => this.log(`ERR#DM_${errorcode}`, "error")
